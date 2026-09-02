@@ -23,21 +23,25 @@ legacy environment aliases, and serialized response records are removed.
 Scope: implement the internal `MerchantDuo_CloudflareApo` Magento module under
 `magento/MerchantDuo/CloudflareApo`. The current module owns effective
 configuration, deterministic Worker artifacts, and queued signed purge requests.
-Worker deployment, VCL/rule analysis, AI proposals, and an operations UI are not
-present until their complete workflows can be implemented.
+Worker deployment and its Magento admin actions are the next module phase.
+VCL/rule analysis, AI proposals, and a separate operations product are out of
+scope.
+
+- [x] Replace the companion-module plan with Magento-owned Worker build, deployment, diagnostics, and cache operations. (Plan only; implementation remains outstanding.)
 
 - [x] Add separate Prettier commands for Worker/repository code and Magento module code. (Locally verified with Prettier's dry-run check.)
 
 - [x] Add the Composer package, Magento registration, module configuration, ACL, schema, and initial service wiring.
 - [x] Implement typed settings, deterministic v3 ProjectConfig generation, canonical JSON, hashing, and isolated build reports.
-- [ ] Add safe Cloudflare credential diagnostics/client boundaries and a complete deployment workflow.
+- [ ] Add encrypted Cloudflare API token/account/Worker settings, deploy-mode selection, and connection diagnostics.
+- [ ] Add redacted Cloudflare request logging and opt-in response debugging.
+- [ ] Package the Worker source and implement the supported isolated local Node.js build.
+- [ ] Implement Worker version upload, secret update, activation, verification, status, and rollback.
 - [x] Implement a declarative, concurrency-safe purge queue with bounded retry/failure states.
 - [x] Implement Magento cache-clean observation, normalized tag queueing, signed purge delivery, retries, cron, and CLI commands.
-- [ ] Add a source-located VCL parser, allowlisted rule compiler, and unsupported diagnostics boundary.
-- [ ] Add redacted AI proposal validation without making AI a build authority.
 - [x] Add configuration ACL plus CLI/cron service wiring.
+- [ ] Add queued admin build/deploy/update/rollback actions and a Cache Management full-purge action.
 - [x] Lint every PHP source and validate XML/JSON configuration.
-- [ ] Document the Worker and Magento module boundaries, configuration, and operational status.
-- [ ] Package a tested prebuilt Worker bundle and exercise multipart Cloudflare upload, activation, verification, and rollback against a configured account.
+- [x] Document the Worker and Magento module boundaries, configuration, and operational status. (Locally verified against the Worker and module contracts.)
 - [ ] Run Magento setup:upgrade, DI compilation, integration tests, and operational UI tests in a real Magento installation.
 - [x] Replace prototype operational persistence with a declarative, concurrency-safe purge queue; honor the enabled setting; and remove incomplete deployment, VCL, AI, and empty admin surfaces. (Tests explicitly deferred by operator.)

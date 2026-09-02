@@ -1,76 +1,125 @@
-# Magento 2 Cloudflare FPC v3
+# Cloudflare full-page cache for Magento 2
 
-Pre-launch Magento storefront full-page caching for Cloudflare Workers Caching.
+A Magento full-page cache that does not need a Varnish server.
 
-The Worker has two entrypoints. `Gateway` is not cached: it validates purge
-requests, normalizes browser requests, and bypasses private traffic. Public
-`GET` and `HEAD` requests are then sent to the cache-enabled `Storefront`
-entrypoint with a canonical cache key. On a native cache hit, `Storefront` does
-not execute. On a miss or revalidation, it fetches Magento and only returns a
-response to cache after the cache policy accepts it.
+This package puts the public storefront cache on Cloudflare. Anonymous product,
+category, CMS, and other public pages can be served near the visitor, while
+customer sessions, carts, checkout, administration, and other private requests
+continue to Magento.
 
-This is a v3 rewrite. It has no KV page storage, serialized page records,
-hit-for-pass records, or legacy configuration aliases.
+The Magento module supplies the store-specific configuration and sends cache
+invalidations when Magento content changes. The Worker contains the request and
+cache policy. Page bodies are not stored in Magento, Redis, or Worker KV.
 
-## Status
+![Screenshot](screenshot.png)
 
-The Worker policy, native purge handling, and Magento module are implemented
-locally. They have not yet been accepted against a staged Worker or a real
-Magento installation. The repository does not provide Cloudflare deployment,
-credential diagnostics, VCL/rule conversion, AI configuration, or an
-operations UI.
+## Why use it
 
-## Local development
+- No separate Varnish host to install, size, monitor, or keep in RAM.
+- The cache is distributed across Cloudflare instead of living on one server.
+- Traffic is not limited by the memory or CPU of a fixed cache VM.
+- Smaller stores can start on the limited
+  [Cloudflare Workers Free plan](https://developers.cloudflare.com/workers/platform/pricing/).
+- Magento cache tags trigger targeted invalidation, with a full purge available
+  for broader cache flushes.
+- Private Magento traffic bypasses the shared cache before it reaches the cached
+  Worker entrypoint.
 
-Wrangler 4.107 or later is required for per-entrypoint Workers Caching.
+Cloudflare usage is not unconditionally free, and no service is literally
+infinite. Charges and limits depend on the Cloudflare plan. The practical
+difference is that cache capacity follows Cloudflare's network instead of a
+Varnish machine attached to the Magento stack.
+
+## Requirements
+
+- Magento 2 with PHP 8.1 or later;
+- a Cloudflare account with Workers available;
+- Composer;
+- Node.js and npm for the local Worker build.
+
+The Magento origin must have a hostname that the Worker can reach without
+routing back through the Worker itself.
+
+## Install the Magento module
+
+Install the Composer package from the repository configured for your Magento
+project:
 
 ```sh
-npm install
-cp .dev.vars.example .dev.vars
-# Set PURGE_SECRET and replace the development project-config fixture.
-npm run check
-npm run types
-npx wrangler dev --local
+composer require merchantduo/magento2-cloudflare-apo
+bin/magento module:enable MerchantDuo_CloudflareApo
+bin/magento setup:upgrade
 ```
 
-`npm run check` validates the TypeScript project. `npm run types` regenerates
-Worker bindings after Wrangler changes. Local Wrangler validates code and
-configuration only; it cannot confirm distributed cache hits, stale delivery,
-request collapse, or entrypoint-scoped purge behavior.
+For a production installation, run the normal deployment steps used by the
+store, including DI compilation and cache cleaning:
 
-## Cache and purge policy
+```sh
+bin/magento setup:di:compile
+bin/magento cache:clean
+```
 
-Only public `GET` and `HEAD` requests are eligible for shared caching.
-Authorization, private sessions, admin, customer, cart, checkout, REST,
-static and health paths, range requests, unsafe methods, and GraphQL requests
-without `X-Magento-Cache-Id` bypass it. Cacheable responses must also satisfy
-the configured status and MIME policy and cannot be private, `no-store`,
-`no-cache`, `Vary: *`, or set cookies.
+## Configure it
 
-Accepted responses use `Cache-Control: public, max-age=<ttl>,
-stale-while-revalidate=<grace>`. `s-maxage` is intentionally not used because
-it disables Workers Caching stale-while-revalidate behavior. Magento cache tags
-and the stable `site:` and `route:` tags are normalized before emission.
+Open Stores > Configuration > Services > Cloudflare APO v3 and choose the
+website scope. Set:
 
-Magento sends a signed JSON `POST` to the configured purge path, which defaults
-to `/__fpc/purge`. The payload may contain `tags`, `pathPrefixes`, or the
-explicit `{ "purgeEverything": true }` form. Requests require
-`X-Purge-Timestamp`, `X-Purge-Nonce`, and `X-Purge-Signature`. The signature is
-the lowercase HMAC-SHA-256 digest of `<timestamp>.<nonce>.<raw request body>`,
-keyed with the `PURGE_SECRET` binding.
+- the Magento origin hostname and protocol;
+- the Cloudflare account ID, Worker name, and scoped API token;
+- the public Worker URL and purge path;
+- a purge signing secret;
+- the cache lifetime and stale period.
 
-The nonce guard prevents replay within an isolate and clock window. It is not a
-distributed replay store. Magento retries must use a fresh nonce.
+Use a scoped Cloudflare API token. Global API keys are not supported. Keep the
+API token and purge signing secret separate.
 
-## Magento module
+Test access and build the website-specific Worker:
 
-[`magento/MerchantDuo/CloudflareApo`](magento/MerchantDuo/CloudflareApo) holds
-the `MerchantDuo_CloudflareApo` module. It reads website configuration, writes
-a deterministic data-only `project-config.ts` artifact, and queues signed tag
-and full-flush purges. Purge delivery is disabled by default.
+```sh
+bin/magento cloudflare-apo:worker:connection --website=1
+bin/magento cloudflare-apo:worker:build --website=1
+```
 
-The module documents its configuration, commands, queue, and limits in its own
-[README](magento/MerchantDuo/CloudflareApo/README.md).
+The build report prints its build hash. The validated Worker is written to:
 
-See [architecture.md](architecture.md), [plan-v3.md](plan-v3.md), and
-[tasks.md](tasks.md) for the design and outstanding rollout work.
+```text
+var/merchantduo-cloudflare-apo/build/<website-id>/<build-hash>/
+```
+
+## Deploy the Worker
+
+The current module builds and validates the Worker but does not upload or
+activate it. Deploy the generated workspace with Wrangler:
+
+```sh
+cd var/merchantduo-cloudflare-apo/build/<website-id>/<build-hash>
+npx wrangler login
+npx wrangler deploy --name <worker-name>
+npx wrangler secret put PURGE_SECRET --name <worker-name>
+```
+
+Enter the same value for `PURGE_SECRET` that you saved as the Magento purge
+signing secret. Attach the Worker to the storefront route or custom domain in
+Cloudflare, then set its public URL in Magento.
+
+Enable purge delivery only after the Worker responds on that URL. Magento
+queues cache-tag and full-flush requests and sends them from cron. The queue can
+also be processed manually:
+
+```sh
+bin/magento cloudflare-apo:cache:purge
+```
+
+That command delivers pending queue entries; it does not create a new full
+purge by itself.
+
+## Current status
+
+The Worker policy, Magento configuration, local build, Cloudflare connection
+test, API logging, and signed purge queue are implemented. Worker deployment,
+rollback, Magento admin action buttons, and the Cache Management page action are
+not implemented yet.
+
+See the [module README](magento/MerchantDuo/CloudflareApo/README.md) for module
+settings and operations. [architecture.md](architecture.md) documents the
+request and cache boundaries.

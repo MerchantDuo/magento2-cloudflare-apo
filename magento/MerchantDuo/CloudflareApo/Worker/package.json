@@ -1,0 +1,24 @@
+{
+  "name": "magento2-cloudflare-apo",
+  "version": "1.0.0",
+  "description": "Cloudflare APO for Magento 2 (Full Page Cache)",
+  "type": "module",
+  "scripts": {
+    "dev": "make dev",
+    "deploy": "make deploy",
+    "tail": "wrangler tail",
+    "types": "wrangler types",
+    "check": "tsc --noEmit",
+    "format": "prettier --write --ignore-unknown .",
+    "format:magento": "prettier --write --plugin=@prettier/plugin-php --plugin=@prettier/plugin-xml --ignore-unknown magento/MerchantDuo/CloudflareApo",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@prettier/plugin-php": "^0.25.0",
+    "@prettier/plugin-xml": "^3.4.2",
+    "prettier": "^3.9.6",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.107.0"
+  }
+}
