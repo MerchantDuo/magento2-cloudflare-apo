@@ -1,101 +1,76 @@
-# Cloudflare Worker FPC for Magento 2
+# Magento 2 Cloudflare FPC v3
 
-A Cloudflare Worker implementing Full Page Cache (FPC) for Magento 2 stores. Uses Cloudflare KV for storage and implements stale-while-revalidate for optimal performance.
+Pre-launch Magento storefront full-page caching for Cloudflare Workers Caching.
 
-## Features
+The Worker has two entrypoints. `Gateway` is not cached: it validates purge
+requests, normalizes browser requests, and bypasses private traffic. Public
+`GET` and `HEAD` requests are then sent to the cache-enabled `Storefront`
+entrypoint with a canonical cache key. On a native cache hit, `Storefront` does
+not execute. On a miss or revalidation, it fetches Magento and only returns a
+response to cache after the cache policy accepts it.
 
-- **Stale-While-Revalidate** - Serves stale content while fetching fresh version in background
-- **Smart Cache Bypass** - Automatic bypass for logged-in users, checkout, admin paths
-- **GraphQL Support** - Caches GraphQL responses with X-Magento-Cache-Id variation
-- **Secure Purging** - Protected endpoint for cache invalidation
-- **Debug Headers** - `X-FPC-Cache` (HIT/MISS/STALE/UNCACHEABLE) for easy debugging
-- **Fully Configurable** - All settings overridable via environment variables
+This is a v3 rewrite. It has no KV page storage, serialized page records,
+hit-for-pass records, or legacy configuration aliases.
 
-## Quick Start
+## Status
 
-```bash
-# Install dependencies
+The Worker policy, native purge handling, and Magento module are implemented
+locally. They have not yet been accepted against a staged Worker or a real
+Magento installation. The repository does not provide Cloudflare deployment,
+credential diagnostics, VCL/rule conversion, AI configuration, or an
+operations UI.
+
+## Local development
+
+Wrangler 4.107 or later is required for per-entrypoint Workers Caching.
+
+```sh
 npm install
-
-# Create project
-make create-project name=PROJECT_NAME
-
-# Edit PROJECT_NAME/wrangler.jsonc and PROJECT_NAME/.dev.vars with your settings
-
-# Start local dev server (both ORIGIN_HOST and REPLACE_ORIGIN_LINKS MUST be set)
-make dev name=PROJECT_NAME 
-
-# Deploy to Cloudflare
-make deploy name=PROJECT_NAME
+cp .dev.vars.example .dev.vars
+# Set PURGE_SECRET and replace the development project-config fixture.
+npm run check
+npm run types
+npx wrangler dev --local
 ```
 
-## Project Structure
+`npm run check` validates the TypeScript project. `npm run types` regenerates
+Worker bindings after Wrangler changes. Local Wrangler validates code and
+configuration only; it cannot confirm distributed cache hits, stale delivery,
+request collapse, or entrypoint-scoped purge behavior.
 
-```
-src/
-├── index.ts      # Entry point - fetch handler
-├── types.ts      # TypeScript interfaces
-├── config.ts     # Environment parsing & defaults
-├── context.ts    # Request analysis & cache keys
-├── cache.ts      # KV storage operations
-├── origin.ts     # Origin fetching logic
-├── response.ts   # Response formatting
-└── purge.ts      # Cache purge handling
-```
+## Cache and purge policy
 
-## Configuration
+Only public `GET` and `HEAD` requests are eligible for shared caching.
+Authorization, private sessions, admin, customer, cart, checkout, REST,
+static and health paths, range requests, unsafe methods, and GraphQL requests
+without `X-Magento-Cache-Id` bypass it. Cacheable responses must also satisfy
+the configured status and MIME policy and cannot be private, `no-store`,
+`no-cache`, `Vary: *`, or set cookies.
 
-All settings have sensible defaults and can be overridden via environment variables.
-See [.dev.vars.example](.dev.vars.example) for complete reference.
+Accepted responses use `Cache-Control: public, max-age=<ttl>,
+stale-while-revalidate=<grace>`. `s-maxage` is intentionally not used because
+it disables Workers Caching stale-while-revalidate behavior. Magento cache tags
+and the stable `site:` and `route:` tags are normalized before emission.
 
-## Commands
+Magento sends a signed JSON `POST` to the configured purge path, which defaults
+to `/__fpc/purge`. The payload may contain `tags`, `pathPrefixes`, or the
+explicit `{ "purgeEverything": true }` form. Requests require
+`X-Purge-Timestamp`, `X-Purge-Nonce`, and `X-Purge-Signature`. The signature is
+the lowercase HMAC-SHA-256 digest of `<timestamp>.<nonce>.<raw request body>`,
+keyed with the `PURGE_SECRET` binding.
 
-| Command | Description |
-|---------|-------------|
-| `make create-project name=PROJECT_NAME` | Create new project scaffold |
-| `make dev name=PROJECT_NAME` | Start local dev server for project |
-| `make deploy name=PROJECT_NAME` | Deploy project to Cloudflare |
-| `npm run dev` | Start local development server |
-| `npm run deploy` | Deploy to Cloudflare |
-| `npm run check` | TypeScript type check |
-| `npm run types` | Regenerate Env types |
-| `npm run kv:list` | List KV namespaces |
-| `npm run tail` | Stream live logs |
+The nonce guard prevents replay within an isolate and clock window. It is not a
+distributed replay store. Magento retries must use a fresh nonce.
 
-## Cache Purging
+## Magento module
 
-Send a POST request with the purge secret:
+[`magento/MerchantDuo/CloudflareApo`](magento/MerchantDuo/CloudflareApo) holds
+the `MerchantDuo_CloudflareApo` module. It reads website configuration, writes
+a deterministic data-only `project-config.ts` artifact, and queues signed tag
+and full-flush purges. Purge delivery is disabled by default.
 
-```bash
-# Purge a single page by its URL
-curl -X POST "https://your-domain.com/any-path" \
-  -H "X-Purge-Secret: YOUR_SECRET" 
+The module documents its configuration, commands, queue, and limits in its own
+[README](magento/MerchantDuo/CloudflareApo/README.md).
 
-# Flush all
-curl -X POST "https://your-domain.com/__purge" \
-  -H "X-Purge-Secret: YOUR_SECRET"
-  -H "X-Purge-All: true"
-```
-
-## Response Headers
-
-| Header | Values | Description |
-|--------|--------|-------------|
-| `X-FPC-Cache` | `HIT`, `MISS`, `STALE`, `UNCACHEABLE` | Cache status |
-| `X-FPC-Grace` | `normal` | Present when serving stale |
-| `X-Magento-Cache-Debug` | `HIT`, `MISS`, etc. | Magento compatibility |
-
-## Local Development
-
-```bash
-# Copy example env file
-cp .dev.vars.example PROJECT_NAME/.dev.vars
-
-# Edit .dev.vars with your settings
-# Start dev server
-make dev name=PROJECT_NAME
-```
-
-## License
-
-MIT
+See [architecture.md](architecture.md), [plan-v3.md](plan-v3.md), and
+[tasks.md](tasks.md) for the design and outstanding rollout work.

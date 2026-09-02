@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <section id="merchantduo_cloudflare_apo" translate="label" sortOrder="900" showInDefault="1" showInWebsite="1" showInStore="0">
+            <label>Cloudflare APO v3</label>
+            <tab>service</tab>
+            <resource>MerchantDuo_CloudflareApo::config</resource>
+            <group id="general" translate="label" sortOrder="10" showInDefault="1" showInWebsite="1">
+                <label>General</label>
+                <field id="enabled" type="select" sortOrder="10" showInDefault="1" showInWebsite="1"><label>Enable purge delivery</label><source_model>Magento\Config\Model\Config\Source\Yesno</source_model></field>
+                <field id="worker_url" type="text" sortOrder="20" showInDefault="1" showInWebsite="1"><label>Worker HTTPS URL</label></field>
+                <field id="purge_secret" type="obscure" sortOrder="30" showInDefault="1" showInWebsite="1"><label>Purge signing secret</label><backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model></field>
+                <field id="purge_path" type="text" sortOrder="40" showInDefault="1" showInWebsite="1"><label>Worker purge path</label></field>
+            </group>
+            <group id="origin" translate="label" sortOrder="20" showInDefault="1" showInWebsite="1">
+                <label>Origin</label>
+                <field id="host" type="text" sortOrder="10" showInDefault="1" showInWebsite="1"><label>Origin host</label></field>
+                <field id="protocol" type="select" sortOrder="20" showInDefault="1" showInWebsite="1"><label>Origin protocol</label><source_model>MerchantDuo\CloudflareApo\Model\Config\Source\Protocol</source_model></field>
+            </group>
+            <group id="cache" translate="label" sortOrder="30" showInDefault="1" showInWebsite="1">
+                <label>Cache</label>
+                <field id="ttl" type="text" sortOrder="10" showInDefault="1" showInWebsite="1"><label>TTL seconds</label></field>
+                <field id="stale" type="text" sortOrder="20" showInDefault="1" showInWebsite="1"><label>Stale seconds</label></field>
+                <field id="statuses" type="text" sortOrder="30" showInDefault="1" showInWebsite="1"><label>Cacheable statuses</label></field>
+                <field id="mime_types" type="text" sortOrder="40" showInDefault="1" showInWebsite="1"><label>Cacheable MIME types</label></field>
+            </group>
+        </section>
+    </system>
+</config>

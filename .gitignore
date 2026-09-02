@@ -13,4 +13,5 @@ dist/
 */
 !src/
 !src/**/
-
+!magento/
+!magento/**/

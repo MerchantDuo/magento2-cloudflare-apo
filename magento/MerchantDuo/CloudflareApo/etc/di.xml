@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+ <preference for="MerchantDuo\CloudflareApo\Api\BuildServiceInterface" type="MerchantDuo\CloudflareApo\Model\Build\BuildService"/>
+ <preference for="MerchantDuo\CloudflareApo\Api\PurgeServiceInterface" type="MerchantDuo\CloudflareApo\Model\Purge\PurgeService"/>
+ <type name="Magento\Framework\Console\CommandList"><arguments><argument name="commands" xsi:type="array"><item name="cloudflareApoBuild" xsi:type="object">MerchantDuo\CloudflareApo\Console\Command\BuildWorkerCommand</item><item name="cloudflareApoPurge" xsi:type="object">MerchantDuo\CloudflareApo\Console\Command\PurgeCommand</item></argument></arguments></type>
+</config>
